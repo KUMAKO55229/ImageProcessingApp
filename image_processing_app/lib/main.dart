@@ -59,22 +59,29 @@ class _ImageProcessorScreenState extends State<ImageProcessorScreen> {
     final String filter = args[1];
     final SendPort sendPort = args[2];
 
-    img.Image processedImage;
+    img.Image processedImage = img.Image.from(image);
+
     if (filter == 'grayscale') {
       processedImage = img.grayscale(image);
-    } else if (filter == 'red_channel') {
-      processedImage =
-          img.copyResize(image, width: image.width, height: image.height);
+    } else if (filter == 'edge_detection') {
+      processedImage = img.convolution(image,
+          filter: [-1, -1, -1, -1, 8, -1, -1, -1, -1], div: 1);
+    } else {
       for (int y = 0; y < processedImage.height; y++) {
         for (int x = 0; x < processedImage.width; x++) {
-          final pixel = image.getPixel(x, y);
-          final r = img.getLuminanceRgb(
-              pixel.r.round(), pixel.g.round(), pixel.b.round());
-          processedImage.setPixel(x, y, img.ColorInt8(r.toInt()));
+          final pixel = processedImage.getPixel(x, y);
+          if (filter == 'red_channel') {
+            processedImage.setPixel(
+                x, y, img.ColorInt8.rgb(pixel.r.toInt(), 0, 0));
+          } else if (filter == 'green_channel') {
+            processedImage.setPixel(
+                x, y, img.ColorInt8.rgb(0, pixel.g.toInt(), 0));
+          } else if (filter == 'blue_channel') {
+            processedImage.setPixel(
+                x, y, img.ColorInt8.rgb(0, 0, pixel.b.toInt()));
+          }
         }
       }
-    } else {
-      processedImage = image;
     }
 
     sendPort.send(processedImage);
@@ -84,8 +91,8 @@ class _ImageProcessorScreenState extends State<ImageProcessorScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text('Processamento de Imagens')),
-      body: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+      body: ListView(
+        // mainAxisAlignment: MainAxisAlignment.center,
         children: [
           _image == null
               ? Text('Nenhuma imagem selecionada')
@@ -97,18 +104,25 @@ class _ImageProcessorScreenState extends State<ImageProcessorScreen> {
                   height: 200),
           SizedBox(height: 20),
           ElevatedButton(onPressed: _pickImage, child: Text('Escolher Imagem')),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              ElevatedButton(
-                  onPressed: () => _applyFilter('grayscale'),
-                  child: Text('Escala de Cinza')),
-              SizedBox(width: 10),
-              ElevatedButton(
-                  onPressed: () => _applyFilter('red_channel'),
-                  child: Text('Canal Vermelho')),
-            ],
-          )
+          ElevatedButton(
+              onPressed: () => _applyFilter('grayscale'),
+              child: Text('Escala de Cinza')),
+          SizedBox(width: 10),
+          ElevatedButton(
+              onPressed: () => _applyFilter('red_channel'),
+              child: Text('Canal Vermelho')),
+          SizedBox(width: 10),
+          ElevatedButton(
+              onPressed: () => _applyFilter('green_channel'),
+              child: Text('Canal Verde')),
+          SizedBox(width: 10),
+          ElevatedButton(
+              onPressed: () => _applyFilter('blue_channel'),
+              child: Text('Canal Azul')),
+          SizedBox(width: 10),
+          ElevatedButton(
+              onPressed: () => _applyFilter('edge_detection'),
+              child: Text('Detecção de Bordas'))
         ],
       ),
     );
