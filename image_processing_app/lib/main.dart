@@ -50,49 +50,118 @@ class _ImageProcessorScreenState extends State<ImageProcessorScreen> {
     final bytes = await _image!.readAsBytes();
     final img.Image image = img.decodeImage(Uint8List.fromList(bytes))!;
 
-    final ReceivePort receivePort = ReceivePort();
-    await Isolate.spawn(
-        _processImage, [image, filter, _filterIntensity, receivePort.sendPort]);
+    // 🔥 Divide a imagem em blocos e retorna uma lista de subimagens
+    final List<Map<String, dynamic>> blocks = subdivideImage(image);
 
-    final processedImage = await receivePort.first as img.Image;
+    List<Future<img.Image>> futures = [];
+    List<ReceivePort> receivePorts =
+        List.generate(blocks.length, (_) => ReceivePort());
+
+    for (int i = 0; i < blocks.length; i++) {
+      futures.add(_processImageInIsolate(
+        blocks[i]['block'], // Passamos o bloco já recortado
+        filter,
+        _filterIntensity,
+        blocks[i]['startX'],
+        blocks[i]['startY'],
+        receivePorts[i],
+      ));
+    }
+
+    List<img.Image> processedParts = await Future.wait(futures);
+
+    // 🔄 Recompõe a imagem com os blocos processados
+    img.Image finalImage = img.Image(width: image.width, height: image.height);
+    for (int i = 0; i < blocks.length; i++) {
+      mergeImageRegion(finalImage, processedParts[i], blocks[i]['startX'],
+          blocks[i]['startY']);
+    }
+
     setState(() {
-      _filteredImage = processedImage;
+      _filteredImage = finalImage;
     });
   }
 
+  /// 🔥 Função para dividir a imagem em blocos otimizados
+  List<Map<String, dynamic>> subdivideImage(img.Image image) {
+    final int numCores = Platform.numberOfProcessors;
+    final int idealBlocks = (numCores * 2).clamp(2, 16);
+    final int numRows = (image.height / 256).ceil().clamp(1, idealBlocks);
+    final int numCols = (image.width / 256).ceil().clamp(1, idealBlocks);
+
+    print("🔄 Subdividindo em $numRows linhas x $numCols colunas...");
+
+    int blockWidth = image.width ~/ numCols;
+    int blockHeight = image.height ~/ numRows;
+    List<Map<String, dynamic>> blocks = [];
+
+    for (int row = 0; row < numRows; row++) {
+      for (int col = 0; col < numCols; col++) {
+        int startX = col * blockWidth;
+        int startY = row * blockHeight;
+        int endX = (col == numCols - 1) ? image.width : (col + 1) * blockWidth;
+        int endY =
+            (row == numRows - 1) ? image.height : (row + 1) * blockHeight;
+
+        img.Image block = img.copyCrop(image,
+            x: startX, y: startY, width: endX - startX, height: endY - startY);
+        blocks.add({'block': block, 'startX': startX, 'startY': startY});
+      }
+    }
+    return blocks;
+  }
+
+  Future<img.Image> _processImageInIsolate(
+    img.Image block,
+    String filter,
+    double intensity,
+    int startX,
+    int startY,
+    ReceivePort receivePort,
+  ) async {
+    await Isolate.spawn(_processImage,
+        [block, filter, intensity, startX, startY, receivePort.sendPort]);
+    return await receivePort.first as img.Image;
+  }
+
   static void _processImage(List<dynamic> args) {
-    final img.Image image = args[0];
+    img.Image block = args[0];
     final String filter = args[1];
     final double intensity = args[2];
-    final SendPort sendPort = args[3];
-
-    img.Image processedImage = img.Image.from(image);
+    final int startX = args[3];
+    final int startY = args[4];
+    final SendPort sendPort = args[5];
 
     switch (filter) {
       case 'grayscale':
-        for (int y = 0; y < processedImage.height; y++) {
-          for (int x = 0; x < processedImage.width; x++) {
-            final pixel = processedImage.getPixel(x, y);
+        for (int y = 0; y < block.height; y++) {
+          for (int x = 0; x < block.width; x++) {
+            final pixel = block.getPixel(x, y);
             int luminance =
                 (((pixel.r * 0.3) + (pixel.g * 0.59) + (pixel.b * 0.11)) *
                         intensity)
                     .clamp(0, 255)
                     .toInt();
-            processedImage.setPixel(
+            block.setPixel(
                 x, y, img.ColorInt8.rgb(luminance, luminance, luminance));
           }
         }
         break;
+
       case 'edge_detection':
-        processedImage = img.convolution(image,
-            filter: [-1, -1, -1, -1, 8, -1, -1, -1, -1], div: 1);
+        block = img.convolution(
+          block, // Agora a convolução é apenas no bloco!
+          filter: [-1, -1, -1, -1, 8, -1, -1, -1, -1],
+          div: 1,
+        );
         break;
+
       case 'red_channel':
       case 'green_channel':
       case 'blue_channel':
-        for (int y = 0; y < processedImage.height; y++) {
-          for (int x = 0; x < processedImage.width; x++) {
-            final pixel = processedImage.getPixel(x, y);
+        for (int y = 0; y < block.height; y++) {
+          for (int x = 0; x < block.width; x++) {
+            final pixel = block.getPixel(x, y);
             int r = (filter == 'red_channel' ? pixel.r * 0.3 * intensity : 0)
                 .clamp(0, 255)
                 .toInt();
@@ -103,12 +172,24 @@ class _ImageProcessorScreenState extends State<ImageProcessorScreen> {
                 .clamp(0, 255)
                 .toInt();
 
-            processedImage.setPixel(x, y, img.ColorInt8.rgb(r, g, b));
+            block.setPixel(x, y, img.ColorInt8.rgb(r, g, b));
           }
         }
         break;
     }
-    sendPort.send(processedImage);
+
+    sendPort.send(block);
+  }
+
+  void mergeImageRegion(
+      img.Image target, img.Image source, int startX, int startY) {
+    for (int y = 0; y < source.height; y++) {
+      for (int x = 0; x < source.width; x++) {
+        if (startX + x < target.width && startY + y < target.height) {
+          target.setPixel(startX + x, startY + y, source.getPixel(x, y));
+        }
+      }
+    }
   }
 
   @override
@@ -152,42 +233,10 @@ class _ImageProcessorScreenState extends State<ImageProcessorScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              ElevatedButton(
-                onPressed: () => _applyFilter('grayscale'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.grey,
-                  shape: const CircleBorder(),
-                  padding: EdgeInsets.all(16),
-                ),
-                child: Container(),
-              ),
-              ElevatedButton(
-                onPressed: () => _applyFilter('red_channel'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  shape: const CircleBorder(),
-                  padding: EdgeInsets.all(16),
-                ),
-                child: Container(),
-              ),
-              ElevatedButton(
-                onPressed: () => _applyFilter('green_channel'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  shape: const CircleBorder(),
-                  padding: EdgeInsets.all(16),
-                ),
-                child: Container(),
-              ),
-              ElevatedButton(
-                onPressed: () => _applyFilter('blue_channel'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  shape: const CircleBorder(),
-                  padding: EdgeInsets.all(16),
-                ),
-                child: Container(),
-              ),
+              _buildColorButton('grayscale', Colors.grey),
+              _buildColorButton('red_channel', Colors.red),
+              _buildColorButton('green_channel', Colors.green),
+              _buildColorButton('blue_channel', Colors.blue),
             ],
           ),
           Padding(
@@ -199,6 +248,17 @@ class _ImageProcessorScreenState extends State<ImageProcessorScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildColorButton(String filter, Color color) {
+    return ElevatedButton(
+      onPressed: () => _applyFilter(filter),
+      style: ElevatedButton.styleFrom(
+          backgroundColor: color,
+          shape: const CircleBorder(),
+          padding: const EdgeInsets.all(16)),
+      child: Container(),
     );
   }
 }
