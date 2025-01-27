@@ -1,16 +1,54 @@
 # image_processing_app
+📌 Projeto 1: Processamento Paralelo de Imagens
 
-A new Flutter project.
+📖 Descrição
 
-## Getting Started
+Este projeto implementa um sistema de processamento de imagens utilizando programação paralela para otimizar o desempenho. A aplicação permite carregar imagens e aplicar filtros em tempo real, incluindo:
 
-This project is a starting point for a Flutter application.
+Conversão para escala de cinza
 
-A few resources to get you started if this is your first Flutter project:
+Separação de canais de cor (RGB)
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+Aplicação de kernels de convolução (ex: detecção de bordas)
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+A paralelização é realizada utilizando Isolates e Compute do Dart para distribuir o processamento em múltiplos núcleos.
+
+🚀 Funcionalidades
+
+Carregamento de imagens
+
+Aplicação de filtros de imagem
+
+Processamento paralelo para otimização
+
+Interface intuitiva para interação do usuário
+
+📂 Estrutura do Projeto
+
+ImageProcessingApp/
+│── lib/
+│   │── screens/   # Interface do usuário
+│   │── managers/  # Controle do processamento
+│   │── utils/     # Algoritmos de processamento
+│── assets/
+│── android/
+│── ios/
+│── main.dart      # Arquivo principal
+│── pubspec.yaml   # Dependências do Flutter
+│── README.md
+
+🛠 Tecnologias Utilizadas
+
+Flutter (Dart)
+
+image package para manipulação de imagens
+
+Compute e Isolates para paralelização
+
+🔧 Como Executar
+
+Instale as dependências do Flutter:
+
+flutter pub get
+
+Execute o projeto em um emulador ou dispositivo:
