@@ -13,56 +13,76 @@ class ImageProcessorScreen extends StatelessWidget {
     final size = MediaQuery.sizeOf(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Processamento de Imagens')),
       body: ListView(
         children: [
-          imageProvider.imageFile == null
-              ? const Text('Nenhuma imagem selecionada')
-              : Image.file(imageProvider.imageFile!, height: 200),
           const SizedBox(height: 10),
           imageProvider.filteredImage == null
-              ? Container()
-              : Image.memory(
-                  Uint8List.fromList(
-                      img.encodePng(imageProvider.filteredImage!)),
-                  height: 200),
-          const SizedBox(height: 20),
-          Padding(
-            padding: EdgeInsets.symmetric(
-                vertical: 16, horizontal: size.width * 0.3),
-            child: ElevatedButton(
-              onPressed: imageProvider.pickImage,
-              child: const Text('Escolher Imagem'),
-            ),
+              ? imageProvider.imageFile == null
+                  ? SizedBox.shrink()
+                  : Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Image.file(imageProvider.imageFile!,
+                          height: size.height * 0.4),
+                    )
+              : Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Image.memory(
+                      Uint8List.fromList(
+                          img.encodePng(imageProvider.filteredImage!)),
+                      height: size.height * 0.4),
+                ),
+          Consumer<ImageManager>(
+            builder: (BuildContext context, ImageManager imageManager,
+                Widget? child) {
+              return Padding(
+                padding: EdgeInsets.symmetric(
+                    vertical: 16, horizontal: size.width * 0.3),
+                child: ElevatedButton(
+                  onPressed: imageProvider.pickImage,
+                  child: (imageProvider.imageFile == null &&
+                          imageProvider.filteredImage == null)
+                      ? const Text('Escolher Imagem')
+                      : const Text('Trocar Imagem'),
+                ),
+              );
+            },
           ),
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: size.width * 0.01),
-            child: Slider(
-              value: imageProvider.filterIntensity,
-              min: 0.1,
-              max: 2.0,
-              divisions: 10,
-              label: imageProvider.filterIntensity.toStringAsFixed(1),
-              onChanged: (value) => imageProvider.setFilterIntensity(value),
-            ),
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildColorButton(context, 'grayscale', Colors.grey),
-              _buildColorButton(context, 'red_channel', Colors.red),
-              _buildColorButton(context, 'green_channel', Colors.green),
-              _buildColorButton(context, 'blue_channel', Colors.blue),
-            ],
-          ),
-          Padding(
-            padding: EdgeInsets.symmetric(
-                vertical: 16, horizontal: size.width * 0.2),
-            child: ElevatedButton(
-              onPressed: () => imageProvider.applyFilter('edge_detection'),
-              child: const Text('Detecção de Bordas'),
-            ),
-          ),
+          imageProvider.imageFile == null
+              ? SizedBox.shrink()
+              : Padding(
+                  padding: EdgeInsets.symmetric(horizontal: size.width * 0.01),
+                  child: Slider(
+                    value: imageProvider.filterIntensity,
+                    min: 0.1,
+                    max: 2.0,
+                    divisions: 10,
+                    label: imageProvider.filterIntensity.toStringAsFixed(1),
+                    onChanged: (value) =>
+                        imageProvider.setFilterIntensity(value),
+                  ),
+                ),
+          imageProvider.imageFile == null
+              ? SizedBox.shrink()
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _buildColorButton(context, 'grayscale', Colors.grey),
+                    _buildColorButton(context, 'red_channel', Colors.red),
+                    _buildColorButton(context, 'green_channel', Colors.green),
+                    _buildColorButton(context, 'blue_channel', Colors.blue),
+                  ],
+                ),
+          imageProvider.imageFile == null
+              ? SizedBox.shrink()
+              : Padding(
+                  padding: EdgeInsets.symmetric(
+                      vertical: 16, horizontal: size.width * 0.2),
+                  child: ElevatedButton(
+                    onPressed: () =>
+                        imageProvider.applyFilter('edge_detection'),
+                    child: const Text('Detecção de Bordas'),
+                  ),
+                ),
         ],
       ),
     );
